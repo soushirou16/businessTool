@@ -76,7 +76,7 @@ if file is not None:
 
 
 
-    # Assuming 'Customer' and 'Issue Date' columns exist in your DataFrame
+    # Assuming 'Customer' and 'Issue Date' columnddds exist in your DataFrame
 
     # Define theweeeeee previous period (2023)
     previous_period = df[df.index.year == 2023]  # Filter data for year 2023
