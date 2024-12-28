@@ -26,76 +26,77 @@ st.markdown(
 st.sidebar.title("File Upload")
 file = st.sidebar.file_uploader("Upload an Excel file", type=["xlsx"])
 
-if file is not None:
+while file is None:
+    # do nothing
+    continue
     
-    pd.set_option('display.max_columns', None)
-    df = pd.read_excel(file, engine="openpyxl")
+pd.set_option('display.max_columns', None)
+df = pd.read_excel(file, engine="openpyxl")
 
 
     
-    st.header("Data Overview and Analysis (Last 3 Months)")
-    col1, col2, col3 = st.columns(3)
-    st.markdown("---")
+st.header("Data Overview and Analysis (Last 3 Months)")
+col1, col2, col3 = st.columns(3)
+st.markdown("---")
 
 
-    # Convert 'Issue Date' to datetime
-    df['Issue Date'] = pd.to_datetime(df['Issue Date'], errors='coerce')
+# Convert 'Issue Date' to datetime
+df['Issue Date'] = pd.to_datetime(df['Issue Date'], errors='coerce')
 
-    # Clean and convert 'Invoice Amount' to numeric
-    df['Invoice Amount'] = df['Invoice Amount'].replace({'\$': '', ',': ''}, regex=True)  # Remove $ and commas
-    df['Invoice Amount'] = pd.to_numeric(df['Invoice Amount'], errors='coerce')  # Convert to numeric
+# Clean and convert 'Invoice Amount' to numeric
+df['Invoice Amount'] = df['Invoice Amount'].replace({'\$': '', ',': ''}, regex=True)  # Remove $ and commas
+df['Invoice Amount'] = pd.to_numeric(df['Invoice Amount'], errors='coerce')  # Convert to numeric
 
-    # Set 'Issue Date' as the index
-    df.set_index('Issue Date', inplace=True)
+# Set 'Issue Date' as the index
+df.set_index('Issue Date', inplace=True)
 
-    # Group data by month and calculate total invoice amount and invoice volume (count invoices)
-    df_monthly = df.resample('ME').agg({
-        'Invoice Amount': 'sum',   # Sum the invoice amounts for each month
-        'Invoice #': 'count'       # Count the total number of invoices for each month
-    })
+# Group data by month and calculate total invoice amount and invoice volume (count invoices)
+df_monthly = df.resample('ME').agg({
+    'Invoice Amount': 'sum',   # Sum the invoice amounts for each month
+    'Invoice #': 'count'       # Count the total number of invoices for each month
+})
 
 
-    # Calculate totals for the last 3 months and the previous 3 months
-    last_three_months = df_monthly.tail(3)
-    prev_three_months = df_monthly.iloc[-6:-3]
+# Calculate totals for the last 3 months and the previous 3 months
+last_three_months = df_monthly.tail(3)
+prev_three_months = df_monthly.iloc[-6:-3]
 
     # Calculate the total invoice amount and number of invoices for the last and previous 3 months
-    last_three_total_volume = last_three_months['Invoice #'].sum()
-    prev_three_total_volume = prev_three_months['Invoice #'].sum()
+last_three_total_volume = last_three_months['Invoice #'].sum()
+prev_three_total_volume = prev_three_months['Invoice #'].sum()
 
-    last_three_total_amt = last_three_months['Invoice Amount'].sum()
-    prev_three_total_amt = prev_three_months['Invoice Amount'].sum()
-
-
-    growth_rate_volume = ((last_three_total_volume - prev_three_total_volume) / prev_three_total_volume) * 100
-    col1.metric("Invoice Volume", last_three_total_volume, f"{growth_rate_volume:.2f}%", border=True)
-
-    growth_rate_amt = ((last_three_total_amt - prev_three_total_amt) / prev_three_total_amt) * 100
-    col2.metric("Invoice Amount", f"${last_three_total_amt:,.2f}", f"{growth_rate_amt:.2f}%", border=True)
+last_three_total_amt = last_three_months['Invoice Amount'].sum()
+prev_three_total_amt = prev_three_months['Invoice Amount'].sum()
 
 
+growth_rate_volume = ((last_three_total_volume - prev_three_total_volume) / prev_three_total_volume) * 100
+col1.metric("Invoice Volume", last_three_total_volume, f"{growth_rate_volume:.2f}%", border=True)
 
-    #test commit
-    # Assuming 'Customer' and 'Issue Date' columnddds exist in your DataFrame
+growth_rate_amt = ((last_three_total_amt - prev_three_total_amt) / prev_three_total_amt) * 100
+col2.metric("Invoice Amount", f"${last_three_total_amt:,.2f}", f"{growth_rate_amt:.2f}%", border=True)
 
-    # Define theweeeeee previous period (2023)
-    previous_period = df[df.index.year == 2023]  # Filter data for year 2023
 
-    # Define the current period (2024)
-    current_period = df[df.index.year == 2024]  # Filter data for year 2024
 
-    # Get unique customers from each period
-    previous_customers = previous_period['Customer'].unique()
-    current_customers = current_period['Customer'].unique()
+#test commit
+# Assuming 'Customer' and 'Issue Date' columnddds exist in your DataFrame
 
-    # Find repeat customers (intersection of both periods)
-    repeat_customers = set(previous_customers) & set(current_customers)
+# Define theweeeeee previous period (2023)
+previous_period = df[df.index.year == 2023]  # Filter data for year 2023
 
-    # Calculate retention rate
-    retention_rate = (len(repeat_customers) / len(previous_customers)) * 100
+# Define the current period (2024)
+current_period = df[df.index.year == 2024]  # Filter data for year 2024
 
-    # Display retention in the metrics
-    col3.metric("Customer Retention", f"{len(repeat_customers)} Repeat Customers", f"{retention_rate:.2f}% Retention", border=True)
+# Get unique customers from each period
+previous_customers = previous_period['Customer'].unique()
+current_customers = current_period['Customer'].unique()
+
+# Find repeat customers (intersection of both periods)
+repeat_customers = set(previous_customers) & set(current_customers)
+
+# Calculate retention rate
+retention_rate = (len(repeat_customers) / len(previous_customers)) * 100
+# Display retention in the metrics
+col3.metric("Customer Retention", f"{len(repeat_customers)} Repeat Customers", f"{retention_rate:.2f}% Retention", border=True)
 
 
 
