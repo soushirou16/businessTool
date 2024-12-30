@@ -1,5 +1,14 @@
 import streamlit as st
 import pandas as pd
+import requests
+import time
+import re
+import plotly.express as px
+
+
+import folium
+from folium.plugins import HeatMap
+from streamlit_folium import st_folium
 
 # Inject custom CSS to increase container width
 st.markdown(
@@ -35,7 +44,6 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Job List")
 st.sidebar.markdown("Upload the `job-list.xlsx` file containing the job details.")
 job_list = st.sidebar.file_uploader("Choose Job List File", type=["xlsx"])
-
 
 
 def plotGraph(df, timeframe):
@@ -112,29 +120,156 @@ def plotGraph(df, timeframe):
         st.subheader(amt + " Invoice Amount")
         st.line_chart(filtered_data['Invoice Amount'])
 
+def geocode(addresses):
+    # API call to get the geocodes
+    URL = 'https://api.geoapify.com/v1/batch/geocode/search?apiKey=b4c75e67dae1497492698c563da01626'
+    response = requests.post(URL, json=addresses, headers={
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    })
+
+
+    if response.status_code == 202:
+        status_url = response.json()['url']
+
+        while True:
+            status_response = requests.get(status_url, headers={
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            })
+            
+            if status_response.status_code == 202:
+                time.sleep(5)
+                continue
+            elif status_response.status_code == 200:
+                st.write("The request has been processed successfully.")
+                geocode_data = status_response.json()
+                break
+            else:                    
+                st.write("Something went wrong, rip. just message Nick or something lol.")
+                break
+
+        if geocode_data:
+            coordinates = []
+            for result in geocode_data:
+                lat = result['lat']
+                lon = result['lon']
+                coordinates.append((lat, lon))
+            return coordinates
+    else:
+        st.write("Something went wrong, rip. just message Nick or something lol.")
+
+@st.cache_data
+def get_geocoding_results(addresses):
+    return geocode(addresses)
+
+
+# Define the categorize function
+category_patterns = {
+    'toilet-related': r'toilet',
+    'water heater': r'water\s*heater|w/h|wh',
+    'multiple jobs': r'multiple|mulitiple',
+    'leak-related': r'leak',
+    'shower-related': r'shower',
+    'faucet-related': r'faucet',
+    'pipe-related': r'pipe',
+    'kitchen-related': r'kitchen',
+    'bathtub-related': r'tub',
+    'clog-related': r'clog',
+    'bathroom-related': r'bathroom',
+    'drain-related': r'drain',
+    'sink-related': r'sink',
+    'valve-related': r'valve',
+
+}
+
+# Define the categorize function
+def categorize_job_name(job_name):
+    if not isinstance(job_name, str) or not job_name.strip():
+        return None 
+
+    job_name = job_name.lower()
+
+    for category, pattern in category_patterns.items():
+        if re.search(pattern, job_name, re.IGNORECASE):
+            return category
+
+    return job_name
+
 
 # Main content
 if invoice_list is not None:
     dfInvoice = pd.read_excel(invoice_list, engine="openpyxl")
     st.header("Invoice Overview and Analysis")
 
-    # Add buttons for selecting timeframe
+    # add buttons for selecting timeframe
     timeframe = st.radio("Select Timeframe", options=["1M", "3M", "1Y", "All Time"], horizontal=True)
 
-    # Convert 'Issue Date' to datetime
+    # convert 'Issue Date' to datetime
     dfInvoice['Issue Date'] = pd.to_datetime(dfInvoice['Issue Date'], errors='coerce')
 
-    # Clean and convert 'Invoice Amount' to numeric
+    # clean and convert 'Invoice Amount' to numeric
     dfInvoice['Invoice Amount'] = dfInvoice['Invoice Amount'].replace({'\$': '', ',': ''}, regex=True)
     dfInvoice['Invoice Amount'] = pd.to_numeric(dfInvoice['Invoice Amount'], errors='coerce')
 
-    # Set 'Issue Date' as the index
+    # set 'Issue Date' as the index
     dfInvoice.set_index('Issue Date', inplace=True)
 
     plotGraph(dfInvoice, timeframe)
     st.markdown("---")
 
 if job_list is not None:
-    dfJob = pd.read_excel(job_list, engine="openpyxl")
     st.header("Job Insights")
-    # dfJob['Location Address'] is the address for geocoding later :)
+    col1, col2 = st.columns(2)
+    dfJob = pd.read_excel(job_list, engine="openpyxl")
+
+    if "geocode_run" not in st.session_state:
+        addresses = dfJob['Location Address'][:50]
+        addresses = addresses.tolist()
+
+        # Save cords to session state after geocoding
+        st.session_state.cords = get_geocoding_results(addresses)
+        st.session_state.geocode_run = True
+
+    if "cords" in st.session_state:
+        cords = st.session_state.cords
+        df_coords = pd.DataFrame(cords, columns=['lat', 'lon'])
+
+
+        m = folium.Map(location=[df_coords['lat'].mean(), df_coords['lon'].mean()], zoom_start=10, tiles='CartoDB positron')
+        HeatMap(data=cords, radius=10, blur=15, opacity=0.5).add_to(m)
+
+        with col1:
+            st.subheader("Invoice Heatmap of the last 500 Jobs")
+            st_folium(m, width=700, height=500)
+
+    
+    dfJob['Job Name'] = dfJob['Job Name'].apply(categorize_job_name)
+
+    # filter out any less than 50 jobs
+    job_counts = dfJob['Job Name'].value_counts()
+    other_count = job_counts[job_counts < 50].sum()
+    job_counts = job_counts[job_counts >= 50]
+    job_counts = pd.concat([job_counts, pd.Series({'Other': other_count})])
+
+    job_counts_df = job_counts.reset_index()
+    job_counts_df.columns = ['Job Name', 'Count']
+
+    fig = px.pie(job_counts_df, names='Job Name', values='Count', 
+                hover_data={'Count': True},
+                labels={'Job Name': 'Job Category'})
+
+    # Update the layout to make the chart look nicer and larger
+    fig.update_traces(textinfo='percent+label', pull=[0.1]*len(job_counts_df))  # Adds percentage and label
+
+    # Set the width and height of the figure
+    fig.update_layout(
+        showlegend=False,
+        width=700,
+        height=700,
+    )
+
+    # Display the pie chart in Streamlit
+    with col2:
+        st.subheader("Job Category Distribution (Pie Chart)")
+        st.plotly_chart(fig)
