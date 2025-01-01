@@ -95,17 +95,18 @@ def plotGraph(df, timeframe):
     abs_volume_decrease = total_volume - prev_volume
     abs_amt_decrease = total_amt - prev_amt
 
-
-
-
     if timeframe != "All Time":
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         col1.metric("Invoice Volume", total_volume, f"{abs_volume_decrease:+d} ({volume_change:.2f}%)", border=True)
-        col2.metric("Invoice Amount",f"${total_amt:,.2f}", f"{abs_amt_decrease:,.2f} ({amt_change:.2f}%)", border=True)
+        col2.metric("Customer Retention", 0, "0%", border=True)
+        col3.metric("Invoice Amount",f"${total_amt:,.2f}", f"{abs_amt_decrease:,.2f} ({amt_change:.2f}%)", border=True)
     else:
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         col1.metric("Invoice Volume", total_volume, border=True)
-        col2.metric("Invoice Amount", f"${total_amt:,.2f}", border=True)
+        col2.metric("Customer Retention", 0, "0%", border=True)
+        col3.metric("Invoice Amount", f"${total_amt:,.2f}", border=True)
+
+
 
 
 
@@ -163,9 +164,9 @@ def geocode(addresses):
 def get_geocoding_results(addresses):
     return geocode(addresses)
 
+def categorize_job_name(job_name):
 
-# Define the categorize function
-category_patterns = {
+    category_patterns = {
     'toilet-related': r'toilet',
     'water heater': r'water\s*heater|w/h|wh',
     'multiple jobs': r'multiple|mulitiple',
@@ -180,11 +181,8 @@ category_patterns = {
     'drain-related': r'drain',
     'sink-related': r'sink',
     'valve-related': r'valve',
+    }
 
-}
-
-# Define the categorize function
-def categorize_job_name(job_name):
     if not isinstance(job_name, str) or not job_name.strip():
         return None 
 
@@ -224,7 +222,7 @@ if job_list is not None:
     dfJob = pd.read_excel(job_list, engine="openpyxl")
 
     if "geocode_run" not in st.session_state:
-        addresses = dfJob['Location Address'][:50]
+        addresses = dfJob['Location Address'][:900]
         addresses = addresses.tolist()
 
         # Save cords to session state after geocoding
