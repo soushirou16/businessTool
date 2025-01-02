@@ -53,7 +53,8 @@ def plotGraph(df, timeframe):
         amt = 'Daily'
         df_data = df.resample('D').agg({
             'Invoice Amount': 'sum',
-            'Invoice #': 'count'
+            'Invoice #': 'count',
+            'Customer': lambda x: list(x)
         })
         filtered_data = df_data.tail(30)
         prev_data = df_data.iloc[-60:-30]
@@ -61,16 +62,17 @@ def plotGraph(df, timeframe):
         amt = 'Weekly'
         df_data = df.resample('W').agg({
             'Invoice Amount': 'sum',
-            'Invoice #': 'count'
+            'Invoice #': 'count',
+            'Customer': lambda x: list(x)
         })
         filtered_data = df_data.tail(12)
         prev_data = df_data.iloc[-24:-12]
-
     elif timeframe == "1Y":
         amt = 'Bi-Weekly'
         df_data = df.resample('2W').agg({
             'Invoice Amount': 'sum',
-            'Invoice #': 'count'
+            'Invoice #': 'count',
+            'Customer': lambda x: list(x)
         })
         filtered_data = df_data.tail(27)
         prev_data = df_data.iloc[-54:-27]
@@ -78,11 +80,20 @@ def plotGraph(df, timeframe):
         amt = 'Monthly'
         df_data = df.resample('ME').agg({
             'Invoice Amount': 'sum',
-            'Invoice #': 'count'
+            'Invoice #': 'count',
+            'Customer': lambda x: list(x)
         })
         filtered_data = df_data
         prev_data = df_data
 
+    unique_customers = filtered_data['Customer'].explode().drop_duplicates()
+    unique_prev_customers = prev_data['Customer'].explode().drop_duplicates()
+
+    # Calculate customer retention
+    retained_customers = len(unique_customers[unique_customers.isin(unique_prev_customers)])
+    customer_retention = (retained_customers / len(unique_prev_customers)) * 100
+    
+    
     # Display metrics for the selected timeframe
     total_volume = filtered_data['Invoice #'].sum()
     total_amt = filtered_data['Invoice Amount'].sum()
@@ -98,12 +109,12 @@ def plotGraph(df, timeframe):
     if timeframe != "All Time":
         col1, col2, col3 = st.columns(3)
         col1.metric("Invoice Volume", total_volume, f"{abs_volume_decrease:+d} ({volume_change:.2f}%)", border=True)
-        col2.metric("Customer Retention", 0, "0%", border=True)
-        col3.metric("Invoice Amount",f"${total_amt:,.2f}", f"{abs_amt_decrease:,.2f} ({amt_change:.2f}%)", border=True)
+        col2.metric("Customer Retention", f"{customer_retention:.2f}%", border=True)
+        col3.metric("Invoice Amount", f"${total_amt:,.2f}", f"{abs_amt_decrease:,.2f} ({amt_change:.2f}%)", border=True)
     else:
         col1, col2, col3 = st.columns(3)
         col1.metric("Invoice Volume", total_volume, border=True)
-        col2.metric("Customer Retention", 0, "0%", border=True)
+        col2.metric("Customer Retention", None, border=True)
         col3.metric("Invoice Amount", f"${total_amt:,.2f}", border=True)
 
 
@@ -143,7 +154,6 @@ def geocode(addresses):
                 time.sleep(5)
                 continue
             elif status_response.status_code == 200:
-                st.write("The request has been processed successfully.")
                 geocode_data = status_response.json()
                 break
             else:                    
@@ -216,35 +226,31 @@ if invoice_list is not None:
     plotGraph(dfInvoice, timeframe)
     st.markdown("---")
 
-if job_list is not None:
+
+if job_list is None:
+    st.cache_data.clear()
+else:
     st.header("Job Insights")
     col1, col2 = st.columns(2)
     dfJob = pd.read_excel(job_list, engine="openpyxl")
 
-    if "geocode_run" not in st.session_state:
-        addresses = dfJob['Location Address'][:900]
-        addresses = addresses.tolist()
+    # Geocode the addresses directly
+    addresses = dfJob['Location Address'][:200].tolist()
+    cords = get_geocoding_results(addresses)
+    df_coords = pd.DataFrame(cords, columns=['lat', 'lon'])
 
-        # Save cords to session state after geocoding
-        st.session_state.cords = get_geocoding_results(addresses)
-        st.session_state.geocode_run = True
+    # Create a heatmap with the geocoded coordinates
+    m = folium.Map(location=[df_coords['lat'].mean(), df_coords['lon'].mean()], zoom_start=10, tiles='CartoDB positron')
+    HeatMap(data=cords, radius=10, blur=15, opacity=0.5).add_to(m)
 
-    if "cords" in st.session_state:
-        cords = st.session_state.cords
-        df_coords = pd.DataFrame(cords, columns=['lat', 'lon'])
+    with col1:
+        st.subheader("Invoice Heatmap of the last 100 Jobs")
+        st_folium(m, width=700, height=500)
 
-
-        m = folium.Map(location=[df_coords['lat'].mean(), df_coords['lon'].mean()], zoom_start=10, tiles='CartoDB positron')
-        HeatMap(data=cords, radius=10, blur=15, opacity=0.5).add_to(m)
-
-        with col1:
-            st.subheader("Invoice Heatmap of the last 500 Jobs")
-            st_folium(m, width=700, height=500)
-
-    
+    # Categorize job names and prepare data for the pie chart
     dfJob['Job Name'] = dfJob['Job Name'].apply(categorize_job_name)
 
-    # filter out any less than 50 jobs
+    # Filter out any less than 50 jobs
     job_counts = dfJob['Job Name'].value_counts()
     other_count = job_counts[job_counts < 50].sum()
     job_counts = job_counts[job_counts >= 50]
@@ -269,5 +275,5 @@ if job_list is not None:
 
     # Display the pie chart in Streamlit
     with col2:
-        st.subheader("Job Category Distribution (Pie Chart)")
+        st.subheader("Job Category Distribution")
         st.plotly_chart(fig)
