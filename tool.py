@@ -85,15 +85,26 @@ def plotGraph(df, timeframe):
         })
         filtered_data = df_data
         prev_data = df_data
-
-    unique_customers = filtered_data['Customer'].explode().drop_duplicates()
-    unique_prev_customers = prev_data['Customer'].explode().drop_duplicates()
-
-    # Calculate customer retention
-    retained_customers = len(unique_customers[unique_customers.isin(unique_prev_customers)])
-    customer_retention = (retained_customers / len(unique_prev_customers)) * 100
     
+    if timeframe != "All Time":
+        unique_customers = filtered_data['Customer'].explode().drop_duplicates()
+        unique_prev_customers = prev_data['Customer'].explode().drop_duplicates()
+
+        # Calculate customer retention
+        retained_customers = len(unique_customers[unique_customers.isin(unique_prev_customers)])
+        customer_retention = (retained_customers / len(unique_prev_customers)) * 100
+    else:
+        unique_customers = filtered_data['Customer'].explode().drop_duplicates()
+        customer_invoice_counts = dfInvoice.groupby('Customer').size()
+
+        # Filter for customers with more than 1 invoice
+        customers_with_multiple_invoices = customer_invoice_counts[customer_invoice_counts > 1]
+
+        # Count how many such customers exist
+        num_customers_with_multiple_invoices = customers_with_multiple_invoices.count()
+        customer_retention = (num_customers_with_multiple_invoices / unique_customers.count()) * 100
     
+
     # Display metrics for the selected timeframe
     total_volume = filtered_data['Invoice #'].sum()
     total_amt = filtered_data['Invoice Amount'].sum()
@@ -114,7 +125,7 @@ def plotGraph(df, timeframe):
     else:
         col1, col2, col3 = st.columns(3)
         col1.metric("Invoice Volume", total_volume, border=True)
-        col2.metric("Customer Retention", None, border=True)
+        col2.metric("Customer Retention", f"{customer_retention:.2f}%", border=True)
         col3.metric("Invoice Amount", f"${total_amt:,.2f}", border=True)
 
 
@@ -244,7 +255,7 @@ else:
     HeatMap(data=cords, radius=10, blur=15, opacity=0.5).add_to(m)
 
     with col1:
-        st.subheader("Invoice Heatmap of the last 100 Jobs")
+        st.subheader("Invoice Heatmap of the last 200 Jobs")
         st_folium(m, width=700, height=500)
 
     # Categorize job names and prepare data for the pie chart
