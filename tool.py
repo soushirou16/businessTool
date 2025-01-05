@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import time
 import re
-import plotly.express as px
 
 
 import folium
