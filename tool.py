@@ -131,7 +131,6 @@ def plotGraph(df, timeframe):
 
 
 
-
     # Plot the data for the selected timeframe
     col1, col2 = st.columns(2)
 
@@ -246,7 +245,7 @@ else:
     dfJob = pd.read_excel(job_list, engine="openpyxl")
 
     # Geocode the addresses directly
-    addresses = dfJob['Location Address'][:200].tolist()
+    addresses = dfJob['Location Address'][:150].tolist()
     cords = get_geocoding_results(addresses)
     df_coords = pd.DataFrame(cords, columns=['lat', 'lon'])
 
@@ -255,7 +254,7 @@ else:
     HeatMap(data=cords, radius=10, blur=15, opacity=0.5).add_to(m)
 
     with col1:
-        st.subheader("Invoice Heatmap of the last 200 Jobs")
+        st.subheader("Invoice Heatmap of the last 150 Jobs")
         st_folium(m, width=700, height=500)
 
     # Categorize job names and prepare data for the pie chart
